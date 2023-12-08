@@ -15,25 +15,24 @@ def extract_text_from_email(msg):
 
 def extract_text_from_image(image_data):
     try:
-        # Use Tesseract for OCR
-        image = Image.open(io.BytesIO(image_data))
-        text = pytesseract.image_to_string(image)
+        # Use pytesseract for OCR (no need to download Tesseract separately)
+        text = pytesseract.image_to_string(Image.open(io.BytesIO(image_data)))
         return text
     except Exception as e:
         st.error(f"Error extracting text from image: {e}")
         return None
 
-def display_images_with_text(username, password, target_email, start_date):
+def display_images_with_text(imap_server, username, password, target_email, start_date):
     image_and_text_data = []
 
     try:
         # Convert start_date to datetime object
         start_date = datetime.strptime(start_date, '%Y-%m-%d')
 
-        # Connect to the IMAP server (Gmail in this case)
-        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        # Connect to the IMAP server
+        mail = imaplib.IMAP4_SSL(imap_server)
 
-        # Login to your email account
+        # Login to the email account
         mail.login(username, password)
 
         # Select the mailbox (e.g., 'inbox')
@@ -84,27 +83,5 @@ def display_images_with_text(username, password, target_email, start_date):
 st.title("Image and Text Viewer")
 
 # Get user input through Streamlit
-email_address = st.text_input("Enter your email address:")
-password = st.text_input("Enter your email account password:", type="password")
-target_email = st.text_input("Enter the email address from which you want to view images:")
-start_date = st.text_input("Enter the start date (YYYY-MM-DD):")
-
-# Check if the user has provided all necessary inputs
-if email_address and password and target_email and start_date:
-    # Display images and text when the user clicks the button
-    if st.button("View Images and Text"):
-        # Display extracted images and text
-        data = display_images_with_text(email_address, password, target_email, start_date)
-
-        if not data:
-            st.warning("No images found.")
-
-        for idx, entry in enumerate(data, start=1):
-            # Display text content
-            st.text(f'Text {idx}: {entry["text"]}')
-
-            # Display image using PIL directly without io.BytesIO
-            image = Image.open(io.BytesIO(entry["image"]))
-            st.image(image, caption=f'Image {idx}', use_column_width=True)
-else:
-    st.warning("Please fill in all the required fields.")
+imap_server = st.text_input("Enter your IMAP server (e.g., imap.gmail.com):")
+email_addre
