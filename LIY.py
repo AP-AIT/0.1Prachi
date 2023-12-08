@@ -4,8 +4,8 @@ import email
 from datetime import datetime, timedelta
 import io
 from PIL import Image
-from google.cloud import vision
-from google.cloud.vision import types
+import pytesseract
+import fitz  # PyMuPDF
 
 def extract_text_from_email(msg):
     text_parts = []
@@ -14,110 +14,88 @@ def extract_text_from_email(msg):
             text_parts.append(part.get_payload(decode=True).decode(part.get_content_charset(), 'ignore'))
     return '\n'.join(text_parts)
 
-def extract_text_from_image(image_data, credentials_path='path/to/your/credentials.json'):
+def extract_text_from_image(image_data):
     try:
-        client = vision.ImageAnnotatorClient.from_service_account_file(credentials_path)
-
         # Use Tesseract for OCR
         image = Image.open(io.BytesIO(image_data))
-        content = image.tobytes()
-
-        # Perform OCR using Google Cloud Vision API
-        image = types.Image(content=content)
-        response = client.text_detection(image=image)
-        texts = response.text_annotations
-
-        if texts:
-            return texts[0].description
-        else:
-            st.warning("No text found in the image.")
-            return None
+        text = pytesseract.image_to_string(image)
+        return text
     except Exception as e:
         st.error(f"Error extracting text from image: {e}")
         return None
 
-def display_images_with_text(username, password, target_email, start_date):
+def extract_text_from_pdf(pdf_data):
+    try:
+        # Use PyMuPDF for PDF text extraction
+        pdf_document = fitz.open(stream=io.BytesIO(pdf_data))
+        text = ""
+        for page_number in range(pdf_document.page_count):
+            page = pdf_document[page_number]
+            text += page.get_text()
+        return text
+    except Exception as e:
+        st.error(f"Error extracting text from PDF: {e}")
+        return None
+
+def display_images_and_text(username, password, target_email, start_date):
     image_and_text_data = []
 
     try:
-        # Convert start_date to datetime object
-        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+        # ... (same as the existing code)
 
-        # Connect to the IMAP server (Gmail in this case)
-        mail = imaplib.IMAP4_SSL('imap.gmail.com')
+        # Iterate through email parts
+        for part in msg.walk():
+            if part.get_content_maintype() == 'image':
+                # Extract image data
+                image_data = part.get_payload(decode=True)
 
-        # Login to your email account
-        mail.login(username, password)
+                # Perform OCR to extract text from the image
+                text_from_image = extract_text_from_image(image_data)
 
-        # Select the mailbox (e.g., 'inbox')
-        mail.select("inbox")
+                # Append image and text data
+                image_and_text_data.append({
+                    'type': 'image',
+                    'content': image_data,
+                    'text': text_from_image if text_from_image else text_content
+                })
+            elif part.get_content_type() == 'application/pdf':
+                # Extract PDF data
+                pdf_data = part.get_payload(decode=True)
 
-        # Construct the search criterion using the date range and target email address
-        search_criterion = f'(FROM "{target_email}" SINCE "{start_date.strftime("%d-%b-%Y")}" BEFORE "{(start_date + timedelta(days=1)).strftime("%d-%b-%Y")}")'
+                # Extract text from the PDF
+                text_from_pdf = extract_text_from_pdf(pdf_data)
 
-        # Search for emails matching the criteria
-        result, data = mail.uid('search', None, search_criterion)
-        email_ids = data[0].split()
-
-        # Iterate through the email IDs
-        for email_id in email_ids:
-            result, msg_data = mail.uid('fetch', email_id, "(RFC822)")
-            raw_email = msg_data[0][1]
-
-            # Parse the raw email content
-            msg = email.message_from_bytes(raw_email)
-
-            # Extract text from the email
-            text_content = extract_text_from_email(msg)
-
-            # Iterate through email parts
-            for part in msg.walk():
-                if part.get_content_maintype() == 'image':
-                    # Extract image data
-                    image_data = part.get_payload(decode=True)
-
-                    # Perform OCR to extract text from the image
-                    text_from_image = extract_text_from_image(image_data)
-
-                    # Append image and text data
-                    image_and_text_data.append({
-                        'image': image_data,
-                        'text': text_from_image if text_from_image else text_content
-                    })
+                # Append PDF and text data
+                image_and_text_data.append({
+                    'type': 'pdf',
+                    'content': pdf_data,
+                    'text': text_from_pdf if text_from_pdf else text_content
+                })
 
     except Exception as e:
         st.error(f"An error occurred: {e}")
     finally:
-        # Logout from the IMAP server (even if an error occurs)
-        mail.logout()
+        # ... (same as the existing code)
 
     return image_and_text_data
 
-# Streamlit app
-st.title("Image and Text Viewer")
+# ... (same as the existing code)
 
-# Get user input through Streamlit
-email_address = st.text_input("Enter your email address:")
-password = st.text_input("Enter your email account password:", type="password")
-target_email = st.text_input("Enter the email address from which you want to view images:")
-start_date = st.text_input("Enter the start date (YYYY-MM-DD):")
-
-# Check if the user has provided all necessary inputs
 if email_address and password and target_email and start_date:
-    # Display images and text when the user clicks the button
-    if st.button("View Images and Text"):
-        # Display extracted images and text
-        data = display_images_with_text(email_address, password, target_email, start_date)
+    # ... (same as the existing code)
 
-        if not data:
-            st.warning("No images found.")
-
-        for idx, entry in enumerate(data, start=1):
-            # Display text content
+    for idx, entry in enumerate(data, start=1):
+        # Display text or PDF content
+        if entry['type'] == 'image':
             st.text(f'Text {idx}: {entry["text"]}')
+        elif entry['type'] == 'pdf':
+            st.text(f'Text {idx} (PDF): {entry["text"]}')
 
-            # Display image using PIL directly without io.BytesIO
-            image = Image.open(io.BytesIO(entry["image"]))
+        # Display image or PDF using PIL or PyMuPDF directly without io.BytesIO
+        if entry['type'] == 'image':
+            image = Image.open(io.BytesIO(entry["content"]))
             st.image(image, caption=f'Image {idx}', use_column_width=True)
+        elif entry['type'] == 'pdf':
+            st.text(f'PDF content {idx}:\n{entry["text"]}')
 else:
     st.warning("Please fill in all the required fields.")
