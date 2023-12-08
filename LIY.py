@@ -4,6 +4,7 @@ import email
 from datetime import datetime, timedelta
 import io
 from PIL import Image
+import pytesseract
 
 def extract_text_from_email(msg):
     text_parts = []
@@ -11,6 +12,15 @@ def extract_text_from_email(msg):
         if part.get_content_type() == 'text/plain':
             text_parts.append(part.get_payload(decode=True).decode(part.get_content_charset(), 'ignore'))
     return '\n'.join(text_parts)
+
+def extract_text_from_image(image):
+    try:
+        # Use Tesseract for OCR
+        text = pytesseract.image_to_string(image)
+        return text
+    except Exception as e:
+        st.error(f"Error extracting text from image: {e}")
+        return None
 
 def display_images_with_text(username, password, target_email, start_date):
     image_and_text_data = []
@@ -50,10 +60,17 @@ def display_images_with_text(username, password, target_email, start_date):
             for part in msg.walk():
                 if part.get_content_maintype() == 'image':
                     # Extract image data
+                    image_data = part.get_payload(decode=True)
+
+                    # Perform OCR to extract text from the image
+                    text_from_image = extract_text_from_image(io.BytesIO(image_data))
+
+                    # Append image and text data
                     image_and_text_data.append({
-                        'image': part.get_payload(decode=True),
-                        'text': text_content
+                        'image': image_data,
+                        'text': text_from_image if text_from_image else text_content
                     })
+
     except Exception as e:
         st.error(f"An error occurred: {e}")
     finally:
