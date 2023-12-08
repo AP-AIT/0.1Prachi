@@ -13,9 +13,10 @@ def extract_text_from_email(msg):
             text_parts.append(part.get_payload(decode=True).decode(part.get_content_charset(), 'ignore'))
     return '\n'.join(text_parts)
 
-def extract_text_from_image(image):
+def extract_text_from_image(image_data):
     try:
         # Use Tesseract for OCR
+        image = Image.open(io.BytesIO(image_data))
         text = pytesseract.image_to_string(image)
         return text
     except Exception as e:
@@ -63,7 +64,7 @@ def display_images_with_text(username, password, target_email, start_date):
                     image_data = part.get_payload(decode=True)
 
                     # Perform OCR to extract text from the image
-                    text_from_image = extract_text_from_image(io.BytesIO(image_data))
+                    text_from_image = extract_text_from_image(image_data)
 
                     # Append image and text data
                     image_and_text_data.append({
@@ -102,7 +103,7 @@ if email_address and password and target_email and start_date:
             # Display text content
             st.text(f'Text {idx}: {entry["text"]}')
 
-            # Display image using PIL
+            # Display image using PIL directly without io.BytesIO
             image = Image.open(io.BytesIO(entry["image"]))
             st.image(image, caption=f'Image {idx}', use_column_width=True)
 else:
